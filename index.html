@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AI in CIS, 2026–27</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#002099; --navy-mid:#3550BF; --navy-pale:#E8EBF8;
+  --ink:#1D2233; --muted:#5A6175; --rule:#DDE1EC; --paper:#FFFFFF; --mist:#F4F6FB;
+  --ai:#002099; --sys:#D8592F; --cur:#5E8F22; --future:#B7BDCB;
+  --l0:#002099; --l1:#7E77DD; --l2:#D8592F; --l3:#378ADD;
+  --serif:"Sitka Heading","Sitka Text","Source Serif 4",Georgia,serif;
+  --sans:"DM Sans",system-ui,-apple-system,"Segoe UI",Arial,sans-serif;
+  --line:var(--ai);
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);overflow:hidden;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+button{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--l3);outline-offset:3px}
+
+/* ---------- Map ---------- */
+#map{position:fixed;inset:0;z-index:1;transition:opacity .35s ease;overflow:hidden}
+#map svg{position:absolute;inset:0;width:100%;height:100%;display:block}
+#map.zooming svg{visibility:hidden}
+/* A pre-drawn, high-resolution picture of the map. Only this moves during a zoom,
+   so the graphics card just scales an image and never has to redraw the map. */
+#mapcanvas{position:absolute;inset:0;width:100%;height:100%;visibility:hidden;will-change:transform;pointer-events:none}
+#map.zooming #mapcanvas{visibility:visible}
+#map.away{opacity:0;pointer-events:none}
+.st{cursor:pointer}
+.st circle.ring{transition:r .2s}
+.st:hover circle.ring,.st:focus-visible circle.ring{r:21}
+.st text{font-family:var(--sans);font-weight:700;font-size:21px;fill:var(--ink)}
+.st:focus{outline:none}
+.st:focus-visible circle.ring{stroke-width:9}
+.linename{cursor:pointer;font-family:var(--sans);font-weight:700;font-size:22px}
+.linename:hover{text-decoration:underline}
+.future text{font-family:var(--sans);font-weight:500;font-size:19px;fill:#8A90A0}
+.maptitle{font-family:var(--serif);font-weight:700;font-size:86px;fill:var(--navy)}
+.mapyear{font-family:var(--serif);font-weight:600;font-size:86px;fill:#9AA3C7}
+.legend{font-family:var(--sans);font-size:17px;fill:var(--muted)}
+.hint{font-family:var(--sans);font-size:19px;fill:var(--muted)}
+.hint.ask{font-family:var(--serif);font-weight:700;font-size:40px;fill:var(--navy)}
+
+/* ---------- Scenes ---------- */
+/* Every page stays laid out but invisible, so nothing has to be built mid-animation */
+.scene{position:fixed;inset:0;display:flex;flex-direction:column;background:var(--paper);
+  padding:0 clamp(20px,4vw,72px);opacity:0;visibility:hidden;contain:layout paint;
+  transition:opacity .45s ease, visibility 0s linear .45s;z-index:2}
+.scene.in{opacity:1;visibility:visible;transition:opacity .45s ease, visibility 0s}
+.scene:not(.in){pointer-events:none}
+.scene::before{content:"";position:absolute;left:0;right:0;top:0;height:8px;background:var(--line)}
+.head{display:flex;align-items:center;justify-content:space-between;gap:24px;
+  padding-top:calc(20px + env(safe-area-inset-top,0px));min-height:110px}
+.crumb{background:none;border:0;padding:0;cursor:pointer;font-weight:700;font-size:clamp(15px,1.25vw,20px);color:var(--line)}
+.crumb:hover{text-decoration:underline}
+.mini{width:clamp(150px,14vw,240px);aspect-ratio:16/9;cursor:pointer;border:0;background:none;padding:0}
+.mini svg{width:100%;height:100%;display:block}
+.body{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
+  gap:clamp(24px,4vw,72px);align-items:center;padding-bottom:12px}
+.body.even{grid-template-columns:1fr 1fr}
+.visual{min-height:0;height:100%;display:flex;flex-direction:column;justify-content:center;gap:18px}
+.text{max-width:34em}
+h1{font-family:var(--serif);font-weight:700;color:var(--navy);font-size:clamp(34px,3.6vw,64px);line-height:1.05;margin:0 0 .45em}
+h2{font-family:var(--serif);font-weight:700;color:var(--navy);font-size:clamp(22px,1.9vw,32px);line-height:1.15;margin:.2em 0 .35em}
+.lede{font-size:clamp(19px,1.55vw,26px);line-height:1.45;margin:0 0 1em}
+.text p,.text li{font-size:clamp(16px,1.25vw,21px);line-height:1.55}
+.facts{list-style:none;padding:0;margin:0}
+.facts li{position:relative;padding-left:26px;margin:0 0 .7em}
+.facts li::before{content:"";position:absolute;left:0;top:.55em;width:11px;height:11px;border-radius:50%;
+  border:3px solid var(--line);background:#fff}
+.note{color:var(--muted)}
+.foot{display:flex;justify-content:space-between;align-items:center;gap:12px;
+  padding-bottom:calc(18px + env(safe-area-inset-bottom,0px));min-height:64px;color:var(--muted);font-size:15px}
+.navbtns{display:flex;gap:8px}
+.navbtns button{background:var(--mist);border:1px solid var(--rule);border-radius:999px;padding:8px 18px;cursor:pointer;font-weight:500}
+.navbtns button:hover{background:var(--navy-pale)}
+.navbtns button[disabled]{opacity:.35;cursor:default}
+
+/* Media */
+.media{position:relative;width:100%;border-radius:14px;overflow:hidden;background:var(--mist);box-shadow:0 1px 0 var(--rule),0 18px 40px -22px rgba(0,20,100,.35)}
+.media video,.media img{display:block;width:100%;height:100%;object-fit:cover}
+.media{transition:opacity .4s}.media.waiting{opacity:.4}
+.r169{aspect-ratio:16/9}.r1610{aspect-ratio:16/10}.ra4{aspect-ratio:1/1.414}
+.missing{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;
+  height:100%;width:100%;padding:16px;border:2px dashed #C3C9DA;border-radius:14px;color:var(--muted);font-size:15px;background:var(--mist)}
+.missing b{color:var(--ink);font-size:16px;word-break:break-all}
+.cap{font-size:15px;color:var(--muted);margin-top:8px}
+
+/* Phone frame */
+.phone{position:relative;height:min(100%,70vh);aspect-ratio:9/19.5;margin:0 auto;border-radius:44px;background:#111827;padding:12px;
+  box-shadow:0 30px 60px -28px rgba(0,20,100,.55)}
+.phone .screen{width:100%;height:100%;border-radius:33px;overflow:hidden;background:#fff}
+.phone .screen video{width:100%;height:100%;object-fit:cover;display:block}
+.phone .missing{border-radius:33px;border:0}
+
+/* AI overview stack */
+.stack{display:flex;flex-direction:column;gap:12px;justify-content:center}
+.stack .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.blk{text-align:left;border-radius:14px;padding:clamp(16px,1.8vw,30px);cursor:pointer;border:0;display:flex;flex-direction:column;gap:6px;transition:transform .15s}
+.blk:hover{transform:translateY(-2px)}
+.blk strong{font-family:var(--serif);font-size:clamp(20px,1.9vw,32px);line-height:1.1}
+.blk span{font-size:clamp(14px,1.15vw,19px);line-height:1.4}
+.blk.pale{background:var(--navy-pale);color:var(--navy)}
+.blk.mid{background:var(--navy-mid);color:#fff}
+.blk.base{background:var(--navy);color:#fff;padding-block:clamp(22px,2.4vw,40px)}
+.stacklabel{font-size:14px;color:var(--muted);text-align:right}
+
+/* Levels */
+.levels{display:flex;flex-direction:column;gap:12px}
+.lvl{display:grid;grid-template-columns:clamp(64px,6vw,96px) 1fr;border-radius:14px;overflow:hidden;background:var(--mist)}
+.lvl .n{display:flex;align-items:center;justify-content:center;color:#fff;font-family:var(--serif);font-weight:700;font-size:clamp(34px,3.4vw,56px)}
+.lvl .d{padding:clamp(12px,1.3vw,20px) clamp(16px,1.6vw,26px)}
+.lvl .d strong{display:block;font-size:clamp(18px,1.6vw,26px);margin-bottom:2px}
+.lvl .d span{font-size:clamp(14px,1.15vw,19px);line-height:1.4;color:#3B4152}
+
+/* Guide scroller */
+.guide{height:100%;overflow-y:auto;border-radius:14px;background:var(--mist);padding:20px;scroll-snap-type:y proximity;
+  display:flex;flex-direction:column;align-items:center;gap:20px}
+.guide img{width:min(100%,560px);border-radius:6px;box-shadow:0 10px 30px -14px rgba(0,20,100,.4);scroll-snap-align:start}
+.scrollhint{font-size:15px;color:var(--muted);margin-top:.5em}
+
+/* Timeline */
+.timeline{display:grid;grid-template-columns:repeat(10,1fr);position:relative;padding-top:30px}
+.timeline::before{content:"";position:absolute;left:5%;right:5%;top:52px;height:10px;border-radius:5px;background:var(--navy-pale)}
+.tm{position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px}
+.tm .dot{width:34px;height:34px;border-radius:50%;background:#fff;border:7px solid #C5CCE8;position:relative;z-index:1}
+.tm.done .dot{border-color:var(--navy);background:var(--navy)}
+.tm.next .dot{border-color:var(--navy)}
+.tm .m{font-weight:700;font-size:clamp(14px,1.1vw,18px)}
+.tm .t{font-size:clamp(12px,1vw,16px);color:var(--muted);line-height:1.3;max-width:9em}
+.tm.done .t,.tm.next .t{color:var(--ink)}
+.tlkey{display:flex;gap:22px;margin-top:34px;font-size:15px;color:var(--muted)}
+.tlkey i{display:inline-block;width:14px;height:14px;border-radius:50%;vertical-align:-2px;margin-right:6px;border:3px solid var(--navy)}
+.tlkey i.f{background:var(--navy)}
+
+/* Overview columns */
+.col{cursor:pointer;border:0;background:none;text-align:left;padding:0;display:flex;flex-direction:column;gap:10px;min-height:0}
+.col:hover h2{text-decoration:underline}
+.col p{font-size:clamp(15px,1.2vw,20px);line-height:1.5;margin:0;max-width:32em}
+.bigrow .big,.big{font-family:var(--serif);font-weight:700;color:var(--sys);font-size:clamp(44px,5vw,88px);line-height:1}
+.bigrow{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+.bigrow span{font-size:clamp(16px,1.3vw,22px)}
+.ovtitle{display:flex;align-items:baseline;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.ovtitle h1{margin-bottom:.3em}
+.tag{display:inline-flex;align-items:center;gap:8px;font-size:15px;color:var(--muted)}
+.tag svg{flex:none}
+.ovgrid{flex:1;min-height:0;display:grid;grid-template-columns:1fr 1fr;gap:clamp(24px,4vw,64px);align-items:start;padding-bottom:12px}
+.ovwrap{flex:1;min-height:0;display:flex;flex-direction:column}
+.hubcol{display:grid;grid-template-columns:auto 1fr;gap:24px;align-items:center}
+.hubcol .phone{height:min(46vh,440px)}
+.futurerow{display:flex;align-items:center;gap:22px;margin-top:clamp(12px,2vh,28px);color:var(--muted);font-size:clamp(15px,1.2vw,20px)}
+.futurerow svg{flex:none;width:clamp(260px,26vw,420px);height:auto}
+
+/* Tabs (Small Steps) */
+.tabs{display:flex;gap:8px;flex-wrap:wrap}
+.tabs button{border:1px solid var(--rule);background:var(--mist);border-radius:999px;padding:8px 18px;cursor:pointer;font-weight:500}
+.tabs button[aria-selected="true"]{background:var(--cur);border-color:var(--cur);color:#fff}
+.panel{flex:1;min-height:0;display:none}
+.panel.on{display:flex}
+.before{gap:16px;width:100%}
+.before .media{flex:1;height:100%}
+.before .media img{object-fit:contain;background:#fff}
+
+.qr{display:flex;align-items:center;gap:18px;margin-top:1.2em}
+.qr svg{width:clamp(110px,9vw,160px);height:auto;background:#fff;padding:10px;border-radius:10px;border:1px solid var(--rule)}
+.qr span{font-size:clamp(15px,1.2vw,20px);color:var(--muted)}
+a{color:var(--navy)}
+.facts .sub{list-style:none;padding:0;margin:.4em 0 0}
+.facts .sub li{padding-left:22px;margin:0 0 .15em}
+.facts .sub li::before{width:8px;height:3px;border:0;border-radius:2px;background:var(--line);top:.8em}
+.browser{display:flex;flex-direction:column;width:100%;height:100%;min-height:0;border-radius:14px;overflow:hidden;background:#fff;
+  border:1px solid var(--rule);box-shadow:0 18px 40px -22px rgba(0,20,100,.35)}
+.bar{display:flex;align-items:center;gap:14px;padding:9px 14px;background:var(--mist);border-bottom:1px solid var(--rule)}
+.dots{display:flex;gap:6px}.dots i{width:11px;height:11px;border-radius:50%;background:#CDD2E0}
+.url{flex:1;min-width:0;font:inherit;font-size:14px;color:var(--muted);background:#fff;border:1px solid var(--rule);border-radius:999px;padding:4px 14px}
+.url:focus{color:var(--ink);outline:2px solid var(--l3);outline-offset:0}
+.pagetabs{display:flex;gap:4px;background:#fff;border:1px solid var(--rule);border-radius:999px;padding:3px}
+.pagetabs button{border:0;background:none;border-radius:999px;padding:4px 14px;font-size:14px;font-weight:500;color:var(--muted);cursor:pointer;white-space:nowrap}
+.pagetabs button[aria-pressed="true"]{background:var(--line);color:#fff}
+.swap{border:0;background:none;color:var(--muted);font-size:13px;cursor:pointer;text-decoration:underline}
+.viewport{flex:1;min-height:0;position:relative}
+.viewport iframe,.viewport img,.viewport .missing{position:absolute;inset:0;width:100%;height:100%;border:0;object-fit:cover;object-position:top}
+.livevis{height:100%;padding-block:4px}
+
+@media (max-width:900px){
+  body{overflow:auto}
+  .scene{position:absolute;min-height:100%;overflow:auto}
+  .body,.body.even,.ovgrid{grid-template-columns:1fr}
+  .visual{height:auto}
+  .guide{max-height:70vh}
+  .hubcol{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){
+  *{transition:none!important}
+}
+</style>
+</head>
+<body>
+
+<div id="map" aria-label="Map of projects"><canvas id="mapcanvas" aria-hidden="true"></canvas><svg id="mapsvg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid meet" role="img"></svg></div>
+<div id="scenes"></div>
+
+<script>
+/* =========================================================
+   Edit text in the SCENES section below. Media files go in
+   the assets folder with the exact names used here.
+   ========================================================= */
+
+const LINES = {
+  ai:         { name:"AI teaching and policy", color:"#002099", path:"M150 290 H990 L1110 410 H1330", label:[150,248], overview:"ov-ai" },
+  systems:    { name:"School systems",          color:"#D8592F", path:"M150 560 H560 L680 440 H1070", label:[150,518], overview:"ov-systems" },
+  curriculum: { name:"Curriculum support",      color:"#5E8F22", path:"M150 760 H760", future:"M760 760 H1060 L1180 640 H1490", label:[150,718], overview:"ov-curriculum" }
+};
+
+const STATIONS = {
+  policy:   { line:"ai", x:250,  y:290, label:"AI policy" },
+  training: { line:"ai", x:480,  y:290, label:"Staff training" },
+  literacy: { line:"ai", x:710,  y:290, label:"AI literacy|Years 4–8" },
+  levels:   { line:"ai", x:900,  y:290, label:"AI levels|Year 9 and up" },
+  guide:    { line:"ai", x:1230, y:410, label:"Thinking|Partner Guide" },
+  house:    { line:"systems", x:330, y:560, label:"House points", built:true },
+  library:  { line:"systems", x:810, y:440, label:"Library", built:true },
+  catalogue:{ line:"systems", x:1000, y:440, label:"Library|catalogue", built:true },
+  steps:    { line:"curriculum", x:330, y:760, label:"Small Steps|for Cambridge", built:true },
+  hub:      { line:"curriculum", x:610, y:760, label:"Maths|Practice Hub", built:true }
+};
+const FUTURE = [ {x:930,y:760,label:"English"}, {x:1250,y:640,label:"Science"}, {x:1420,y:640,label:"Humanities"} ];
+
+const STRANDS = {
+  ai:["ov-ai","policy","training","literacy","levels","guide"],
+  systems:["ov-systems","house","library","catalogue"],
+  curriculum:["ov-curriculum","steps","hub"]
+};
+const MAIN_PATH = ["map","ov-ai","ov-systems","ov-curriculum"];
+
+/* Training timeline: state is "done", "next" or "" */
+const SESSIONS = [
+  {m:"Sep", t:"Staff needs survey", s:"done"},
+  {m:"Oct", t:"Data protection and privacy", s:"done"},
+  {m:"Nov", t:"Prompting", s:"next"},
+  {m:"Dec", t:"", s:""},{m:"Jan", t:"", s:""},{m:"Feb", t:"", s:""},
+  {m:"Mar", t:"", s:""},{m:"Apr", t:"", s:""},{m:"May", t:"", s:""},{m:"Jun", t:"", s:""}
+];
+
+const QR_PATH = "M0 0.5h7m2 0h2m1 0h1m1 0h1m1 0h1m1 0h2m2 0h7m-29 1h1m5 0h1m2 0h1m5 0h1m4 0h1m1 0h1m5 0h1m-29 1h1m1 0h3m1 0h1m2 0h1m1 0h1m3 0h1m1 0h2m1 0h1m1 0h1m1 0h3m1 0h1m-29 1h1m1 0h3m1 0h1m5 0h2m5 0h2m1 0h1m1 0h3m1 0h1m-29 1h1m1 0h3m1 0h1m3 0h1m1 0h1m1 0h2m1 0h2m3 0h1m1 0h3m1 0h1m-29 1h1m5 0h1m1 0h1m2 0h2m2 0h1m1 0h4m1 0h1m5 0h1m-29 1h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7m-20 1h2m1 0h2m2 0h2m-18 1h1m2 0h1m1 0h2m1 0h1m3 0h1m1 0h1m1 0h1m2 0h1m1 0h1m1 0h1m-24 1h2m2 0h1m2 0h1m4 0h2m2 0h1m3 0h1m1 0h1m2 0h1m2 0h1m-29 1h1m1 0h7m1 0h2m1 0h2m1 0h1m1 0h4m1 0h5m-26 1h4m1 0h1m1 0h3m1 0h1m1 0h2m1 0h2m2 0h1m3 0h2m-27 1h2m1 0h3m5 0h1m1 0h1m2 0h1m3 0h2m2 0h1m1 0h2m-28 1h1m1 0h1m1 0h1m1 0h1m2 0h2m1 0h2m4 0h3m-17 1h2m2 0h1m1 0h4m1 0h1m3 0h1m2 0h6m-25 1h2m2 0h1m1 0h3m2 0h1m1 0h3m2 0h4m1 0h1m-28 1h4m2 0h1m2 0h1m3 0h1m1 0h1m1 0h2m1 0h2m5 0h1m-27 1h2m1 0h2m1 0h2m1 0h2m1 0h2m1 0h2m3 0h3m1 0h1m2 0h1m-29 1h1m1 0h1m3 0h2m1 0h1m1 0h2m1 0h1m2 0h1m3 0h3m3 0h2m-26 1h3m2 0h1m1 0h1m3 0h1m1 0h5m1 0h3m2 0h2m-29 1h1m1 0h1m1 0h1m1 0h2m1 0h1m1 0h1m8 0h5m1 0h1m-19 1h4m2 0h1m1 0h1m2 0h2m3 0h1m1 0h3m-29 1h7m2 0h1m10 0h1m1 0h1m1 0h1m2 0h1m-28 1h1m5 0h1m1 0h5m1 0h2m2 0h1m1 0h1m3 0h4m-28 1h1m1 0h3m1 0h1m2 0h1m1 0h2m2 0h3m2 0h5m2 0h2m-29 1h1m1 0h3m1 0h1m1 0h1m2 0h1m5 0h1m2 0h1m1 0h6m-28 1h1m1 0h3m1 0h1m2 0h5m2 0h6m2 0h3m1 0h1m-29 1h1m5 0h1m2 0h1m1 0h2m2 0h9m3 0h1m-28 1h7m1 0h1m2 0h2m1 0h1m1 0h2m1 0h3m1 0h2m2 0h1";
+
+/* ---------- helpers ---------- */
+/* vid("name") tries assets/name.mp4, then assets/name.jpg */
+function vid(base, cls="r169"){
+  return `<div class="media ${cls}"><video data-src="assets/${base}.mp4" data-base="${base}" muted loop playsinline preload="none" onerror="missing(this)"></video></div>`;
+}
+/* A live website in a browser-style frame, with a screenshot to swap to if the connection drops */
+/* pages: optional list of {name, url, shot} shown as a toggle in the frame's top bar */
+function live(url, shot, label, pages){
+  const toggle = pages ? `<span class="pagetabs">${pages.map((p,i)=>
+    `<button data-page="${p.url}" data-shot="assets/${p.shot}" aria-pressed="${i===0}">${p.name}</button>`).join("")}</span>` : "";
+  return `<div class="browser"><div class="bar"><span class="dots"><i></i><i></i><i></i></span>${toggle}
+  <input class="url" type="text" value="${url.replace("https://","")}" spellcheck="false" aria-label="Web address">
+  <button class="swap" data-swap="assets/${shot}" data-live="${url}">Show screenshot</button></div>
+  <div class="viewport"><iframe class="live" data-src="${url}" title="${label}"></iframe></div></div>`;
+}
+/* load an address into a frame (or its screenshot, if that is what's showing) */
+function loadInFrame(browser, url, shot){
+  const sw = browser.querySelector("[data-swap]");
+  sw.dataset.live = url;
+  if(shot) sw.dataset.swap = shot;
+  browser.querySelector(".url").value = url.replace("https://","");
+  const vp = browser.querySelector(".viewport"), fr = vp.querySelector("iframe");
+  if(fr) fr.src = url;
+  else { const im=document.createElement("img"); im.src=sw.dataset.swap; im.alt=""; im.onerror=()=>missing(im); vp.replaceChildren(im); }
+}
+function img(file, cls="r169", alt=""){
+  return `<div class="media ${cls}"><img src="assets/${file}" alt="${alt}" onerror="missing(this)"></div>`;
+}
+function phone(file){
+  return `<div class="phone"><div class="screen"><video data-src="assets/${file}" muted loop playsinline preload="none" onerror="missing(this)"></video></div></div>`;
+}
+function missing(el){
+  const cbox = el.closest("[data-cascade]");
+  if(cbox) setTimeout(()=>{ const v = cbox.querySelector("video"); if(v && v.paused) playOnly(cbox, v); }, 0);
+  if(el.tagName==="VIDEO" && el.dataset.base){
+    const im = document.createElement("img");
+    im.src = `assets/${el.dataset.base}.jpg`; im.alt = "";
+    im.onerror = ()=>{ const b=document.createElement("div"); b.className="missing";
+      b.innerHTML=`<span>Add this file</span><b>assets/${el.dataset.base}.mp4</b><span>or a screenshot named</span><b>assets/${el.dataset.base}.jpg</b>`; im.replaceWith(b); };
+    el.replaceWith(im); return;
+  }
+  const src = el.getAttribute("src") || el.dataset.src || "";
+  const box = document.createElement("div");
+  box.className = "missing";
+  box.innerHTML = `<span>Add this file</span><b>${src}</b>`;
+  el.replaceWith(box);
+}
+function builtTag(){
+  return `<span class="tag"><svg width="26" height="26" viewBox="0 0 26 26"><circle cx="13" cy="13" r="9" fill="#fff" stroke="var(--line)" stroke-width="5"/><circle cx="13" cy="13" r="3.5" fill="var(--line)"/></svg>Built in-house using AI</span>`;
+}
+function qr(){
+  return `<svg viewBox="0 0 29 29" role="img" aria-label="QR code for the Maths Practice Hub"><path d="${QR_PATH}" stroke="#002099"/></svg>`;
+}
+
+/* =========================================================
+   SCENES
+   ========================================================= */
+const SCENES = {
+
+"ov-ai": { line:"ai", focus:"literacy", html:`
+<div class="body">
+  <div class="visual stack">
+    <div class="row">
+      <button class="blk pale" data-go="literacy"><strong>Years 4–8</strong><span>14 AI literacy lessons, mapped to Cambridge Digital Literacy</span></button>
+      <button class="blk pale" data-go="levels"><strong>Year 9 and up</strong><span>AI levels on every task, and the Thinking Partner Guide</span></button>
+    </div>
+    <button class="blk mid" data-go="training"><strong>Staff training</strong><span>Monthly sessions through the year</span></button>
+    <button class="blk base" data-go="policy"><strong>AI policy</strong><span>Version 1.4, written and kept up to date in school</span></button>
+  </div>
+  <div class="text">
+    <h1>AI teaching and policy</h1>
+    <p class="lede">The AI policy sets out how AI can be used across the school, and monthly training helps staff put it into practice. Pupils learn about AI from Year 4, and from Year 9 they begin using it in their own work, at a level their teacher sets for each task.</p>
+  </div>
+</div>`},
+
+"policy": { line:"ai", html:`
+<div class="body" style="grid-template-columns:minmax(0,.8fr) minmax(0,1fr)">
+  <div class="visual">${img("policy-cover.jpg","ra4","First page of the CIS AI Policy")}</div>
+  <div class="text">
+    <h1>AI policy</h1>
+    <p class="lede">Now on version 1.4, and is being actively updated as the tools and guidance change.</p>
+    <ul class="facts">
+      <li>Covers data protection, staff use and pupil use, including the AI levels.</li>
+      <li>Students currently use Copilot only. Staff can use any tool they like.</li>
+    </ul>
+  </div>
+</div>`},
+
+"training": { line:"ai", html:`
+<div class="body" style="grid-template-columns:minmax(0,1.3fr) minmax(0,1fr)">
+  <div class="visual">
+    <div class="timeline">${SESSIONS.map(s=>`<div class="tm ${s.s}"><span class="dot"></span><span class="m">${s.m}</span><span class="t">${s.t}</span></div>`).join("")}</div>
+    <div class="tlkey"><span><i class="f"></i>Done</span><span><i></i>Next</span></div>
+  </div>
+  <div class="text">
+    <h1>Staff training</h1>
+    <ul class="facts">
+      <li>A 30 minute session every month.</li>
+      <li>Each one gives teachers something they can use the next day.</li>
+      <li>Topics came from a staff needs survey at the start of the year.</li>
+      <li>Covers teachers' own use of AI and how to develop student use of AI.</li>
+    </ul>
+  </div>
+</div>`},
+
+"literacy": { line:"ai", html:`
+<div class="body">
+  <div class="visual livevis">${live("https://tkhawkey.github.io/ailiteracy/","ai-literacy.jpg","AI literacy programme")}</div>
+  <div class="text">
+    <h1>AI literacy, Years 4–8</h1>
+    <p class="lede">Fourteen lessons (3 per year group), so pupils understand AI before they start using it in their own work in Year 9.</p>
+    <ul class="facts">
+      <li>Mapped to Cambridge Digital Literacy (0072 and 0082).</li>
+      <li>Five themes: prompting and tools, critical evaluation, AI and the world, safety and wellbeing, and integrity and learning.</li>
+      <li>Every lesson is fully planned and resourced.</li>
+    </ul>
+  </div>
+</div>`},
+
+"levels": { line:"ai", html:`
+<div class="body">
+  <div class="visual levels">
+    <div class="lvl"><div class="n" style="background:var(--l0)">0</div><div class="d"><strong>No AI</strong><span>Timed writing, exams, grammar practice. The pupil does everything.</span></div></div>
+    <div class="lvl"><div class="n" style="background:var(--l1)">1</div><div class="d"><strong>Think with AI</strong><span>AI helps them understand and ask questions. Nothing from it goes into the work.</span></div></div>
+    <div class="lvl"><div class="n" style="background:var(--l2)">2</div><div class="d"><strong>Draft with AI</strong><span>Feedback and ideas for structure. The writing stays theirs, with an AI Use Statement.</span></div></div>
+    <div class="lvl"><div class="n" style="background:var(--l3)">3</div><div class="d"><strong>Create with AI</strong><span>Wider use under teacher guidance, with a Use Statement and a prompt log.</span></div></div>
+  </div>
+  <div class="text">
+    <h1>AI levels</h1>
+    <ul class="facts">
+      <li>Every task where AI could be used has a level, set by the teacher.</li>
+      <li>If no level is given, a task defaults to Level 1.</li>
+      <li>Cambridge-assessed work never goes above Level 1.</li>
+      <li>Teachers have been trained to set levels when they plan tasks.</li>
+    </ul>
+  </div>
+</div>`},
+
+"guide": { line:"ai", html:`
+<div class="body" style="grid-template-columns:minmax(0,1fr) minmax(0,1.1fr)">
+  <div class="text">
+    <h1>Thinking Partner Guide</h1>
+    <p class="lede">Prompts for students, sorted by how they're stuck.</p>
+    <ul class="facts">
+      <li>Six routes:
+        <ul class="sub">
+          <li>I don't understand yet</li>
+          <li>I can't get started</li>
+          <li>Is this good enough?</li>
+          <li>I want to go deeper</li>
+          <li>I want to test myself</li>
+          <li>I want to find better words</li>
+        </ul>
+      </li>
+      <li>Every prompt asks AI to question, test or point out weaknesses. None ask it to write the work.</li>
+      <li>Prompts that need Level 2 or above are marked, so the guide matches the levels.</li>
+    </ul>
+    <p class="scrollhint">Scroll the guide on the right.</p>
+  </div>
+  <div class="visual"><div class="guide" tabindex="0" aria-label="Thinking Partner Guide pages">
+    ${Array.from({length:12},(_,i)=>`<img loading="lazy" src="assets/guide/page-${String(i+1).padStart(2,"0")}.jpg" alt="Guide page ${i+1}">`).join("")}
+  </div></div>
+</div>`},
+
+"ov-systems": { line:"systems", focus:"house", html:`
+<div class="ovwrap">
+  <div class="ovtitle"><h1>School systems</h1>${builtTag()}</div>
+  <div class="ovgrid" data-cascade>
+    <button class="col" data-go="house">
+      ${vid("house-points-awarding")}
+      <h2>House points</h2>
+      <p>Staff award points from their phone or computer, and the totals decide House of the Week in Friday assemblies. This helps us to promote our school values, improve behaviour, and enhance teamwork within the houses.</p>
+    </button>
+    <button class="col" data-go="library">
+      ${vid("library-scanning")}
+      <h2>Library</h2>
+      <div class="bigrow"><span class="big">7,500</span><span>books scanned in and counted</span></div>
+      <p>Firouzeh had always wanted a way to scan books in and out.</p>
+    </button>
+  </div>
+</div>`},
+
+"house": { line:"systems", html:`
+<div class="body">
+  <div class="visual livevis">${live("https://cishousepoints.netlify.app/","house-points-live.jpg","CIS House Points",[
+      {name:"House points", url:"https://cishousepoints.netlify.app/", shot:"house-points-live.jpg"},
+      {name:"Competition", url:"https://cishousepoints.netlify.app/competition", shot:"house-points-competition.jpg"}])}</div>
+  <div class="text">
+    <h1>The house points app</h1>
+    <p class="lede">One place for every member of staff to award house points, from any phone or computer.</p>
+    <ul class="facts">
+      <li>Staff sign in with their school Microsoft account. Pupils can't get in.</li>
+      <li>Points can go to one pupil, a whole class, or a group such as the School Council.</li>
+      <li>Some points are linked to our school values, with certificates planned for when pupils' value points build up.</li>
+      <li>The stats page shows the house totals and decides House of the Week.</li>
+      <li>New features are added as teachers ask for them.</li>
+    </ul>
+  </div>
+</div>`},
+
+"library": { line:"systems", html:`
+<div class="body">
+  <div class="visual" data-cascade>${vid("library-scanning")}${vid("library-app")}</div>
+  <div class="text">
+    <h1>Library</h1>
+    <p class="lede">Firouzeh had always wanted a way to scan books in and out.</p>
+    <ul class="facts">
+      <li>7,500 books scanned in, labelled and counted.</li>
+      <li>Every copy has its own label and QR code.</li>
+      <li>We can now track which student has which book, including the textbooks in secondary.</li>
+    </ul>
+  </div>
+</div>`},
+
+"catalogue": { line:"systems", html:`
+<div class="body">
+  <div class="visual livevis">${live("https://cislibrary.netlify.app/search?sort=title","library-catalogue.jpg","CIS Library catalogue")}</div>
+  <div class="text">
+    <h1>Library catalogue</h1>
+    <p class="lede">A public, searchable catalogue of the school library, which could be shared with parents in the future.</p>
+    <ul class="facts">
+      <li>Search by title, author or ISBN, or just browse the covers.</li>
+      <li>Filter by language, including our Slovak titles, and see what's available to borrow right now.</li>
+      <li>Runs on the same system Firouzeh uses for scanning, so it stays up to date.</li>
+    </ul>
+  </div>
+</div>`},
+
+"ov-curriculum": { line:"curriculum", focus:"hub", html:`
+<div class="ovwrap">
+  <div class="ovtitle"><h1>Curriculum support</h1>${builtTag()}</div>
+  <div class="ovgrid">
+    <button class="col" data-go="steps">
+      ${img("small-steps.jpg","r169","Small Steps for Cambridge")}
+      <h2>Small Steps for Cambridge</h2>
+      <p>Worked with the maths coordinator to align the White Rose curriculum with the Cambridge curriculum for Years 2 to 6.</p>
+    </button>
+    <button class="col" data-go="hub">
+      ${img("maths-hub.jpg","r169","Maths Practice Hub")}
+      <h2>Maths Practice Hub</h2>
+      <p>Practice activities for Year 5 families, matching what's being taught in class.</p>
+    </button>
+  </div>
+  <div class="futurerow">
+    <svg viewBox="0 0 420 60" aria-hidden="true">
+      <path d="M10 30 H410" stroke="#B7BDCB" stroke-width="8" stroke-dasharray="14 12" stroke-linecap="round"/>
+      <g fill="#fff" stroke="#B7BDCB" stroke-width="6"><circle cx="70" cy="30" r="13"/><circle cx="210" cy="30" r="13"/><circle cx="350" cy="30" r="13"/></g>
+    </svg>
+    <span>The same approach could work for English, science and humanities, alongside their coordinators.</span>
+  </div>
+</div>`},
+
+"steps": { line:"curriculum", html:`
+<div class="body">
+  <div class="visual">
+    <div class="tabs" role="tablist">
+      <button role="tab" aria-selected="true" data-tab="before">Before</button>
+      <button role="tab" aria-selected="false" data-tab="after">After</button>
+    </div>
+    <div class="panel before on" data-panel="before">
+      ${img("wr-redacted.jpg","","A White Rose small steps page with steps crossed out")}
+      ${img("cambridge-objectives.jpg","","The separate list of Cambridge objectives")}
+    </div>
+    <div class="panel" data-panel="after">${live("https://tkhawkey.github.io/CISmaths/","small-steps.jpg","Small Steps for Cambridge")}</div>
+  </div>
+  <div class="text">
+    <h1>Small Steps for Cambridge</h1>
+    <p class="lede">White Rose and the Cambridge curriculum don't line up neatly. This shows teachers in Years 2 to 6 exactly what to do with each step.</p>
+    <ul class="facts">
+      <li>Every White Rose step is marked Do, Adapt or Skip.</li>
+      <li>Cambridge objectives that White Rose misses are added where they belong. Hover to see one, click for how to teach it.</li>
+      <li>Decisions were agreed across year groups, such as how times tables are split between Years 3 and 4.</li>
+    </ul>
+    <p class="note"><a href="https://tkhawkey.github.io/CISmaths/" target="_blank" rel="noopener">Open in a new tab</a></p>
+  </div>
+</div>`},
+
+"hub": { line:"curriculum", html:`
+<div class="body">
+  <div class="visual livevis">${live("https://tkhawkey.github.io/mathshub/","maths-hub.jpg","Maths Practice Hub")}</div>
+  <div class="text">
+    <h1>Maths Practice Hub</h1>
+    <ul class="facts">
+      <li>Short activities matching what Year 5 is learning in class, added to through the year.</li>
+      <li>A wrong answer shows the right one and how to work it out.</li>
+      <li>No logins, and no data collected about children.</li>
+      <li>Launched to parents in October.</li>
+      <li>Potential to broaden this out to other year groups if it proves to be popular.</li>
+    </ul>
+    <div class="qr">${qr()}<span>Try it on your phone</span></div>
+  </div>
+</div>`}
+};
+
+/* =========================================================
+   Map drawing
+   ========================================================= */
+function drawMap(opts={}){
+  const {mini=false, hiStation=null, hiLine=null, ask=false} = opts;
+  const w = mini ? 26 : 16;
+  let s = "";
+  if(!mini){
+    s += `<text class="maptitle" x="150" y="150">AI in CIS<tspan class="mapyear" dx="28">2026–27</tspan></text>`;
+    s += `<image href="assets/cis-logo.png" x="1180" y="62" width="300" height="110" preserveAspectRatio="xMaxYMid meet" onerror="this.remove()"/>`;
+  }
+  for(const [id,L] of Object.entries(LINES)){
+    const dim = hiLine && hiLine!==id ? ' opacity=".2"' : '';
+    if(L.future) s += `<path d="${L.future}" fill="none" stroke="var(--future)" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="${mini?'30 24':'22 18'}"${dim}/>`;
+    s += `<path d="${L.path}" fill="none" stroke="${L.color}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"${dim}/>`;
+    if(!mini) s += `<text class="linename" x="${L.label[0]}" y="${L.label[1]}" fill="${L.color}" data-go="${L.overview}" tabindex="0" role="link">${L.name}</text>`;
+  }
+  for(const f of FUTURE){
+    const dim = hiLine && hiLine!=="curriculum" ? ' opacity=".2"' : '';
+    s += `<g class="future"${dim}><circle cx="${f.x}" cy="${f.y}" r="${mini?24:15}" fill="#fff" stroke="var(--future)" stroke-width="${mini?10:6}"/>`;
+    if(!mini) s += `<text x="${f.x}" y="${f.y+46}" text-anchor="middle">${f.label}</text>`;
+    s += `</g>`;
+  }
+  for(const [id,S] of Object.entries(STATIONS)){
+    const c = LINES[S.line].color;
+    const dim = hiLine && hiLine!==S.line ? ' opacity=".2"' : '';
+    if(mini && hiStation===id) s += `<circle cx="${S.x}" cy="${S.y}" r="70" fill="${c}" opacity=".18"/>`;
+    s += `<g class="st" data-go="${id}"${mini?'':' tabindex="0" role="link" aria-label="'+S.label.replace("|"," ")+'"'}${dim}>`;
+    if(!mini) s += `<rect x="${S.x-105}" y="${S.y-32}" width="210" height="${S.label.includes("|")?118:92}" fill="transparent"/>`;
+    s += `<circle class="ring" cx="${S.x}" cy="${S.y}" r="${mini?30:18}" fill="#fff" stroke="${c}" stroke-width="${mini?14:7}"/>`;
+    if(S.built) s += `<circle cx="${S.x}" cy="${S.y}" r="${mini?11:7}" fill="${c}"/>`;
+    if(!mini){
+      const parts = S.label.split("|");
+      s += `<text x="${S.x}" y="${S.y+50}" text-anchor="middle">${parts.map((p,i)=>`<tspan x="${S.x}" dy="${i?24:0}">${p}</tspan>`).join("")}</text>`;
+    }
+    s += `</g>`;
+  }
+  if(!mini){
+    s += `<g class="legend"><circle cx="160" cy="866" r="12" fill="#fff" stroke="#5A6175" stroke-width="5"/><circle cx="160" cy="866" r="4.5" fill="#5A6175"/><text x="184" y="872">Built in-house using AI</text>`;
+    s += `<path d="M420 866 H480" stroke="var(--future)" stroke-width="10" stroke-dasharray="12 9" stroke-linecap="round"/><text x="496" y="872">Possible next steps</text></g>`;
+    s += ask ? `<text class="hint ask" x="1490" y="874" text-anchor="end">Where would you like to go?</text>`
+             : `<text class="hint" x="1490" y="872" text-anchor="end">Press → to start, or choose a station</text>`;
+  }
+  return s;
+}
+
+/* =========================================================
+   Scenes and navigation
+   ========================================================= */
+const scenesEl = document.getElementById("scenes");
+const mapEl = document.getElementById("map");
+const mapSvg = document.getElementById("mapsvg");
+let current = "map";
+let animating = false;
+
+function lineOf(id){ return SCENES[id] ? SCENES[id].line : null; }
+
+function buildScenes(){
+  for(const [id,sc] of Object.entries(SCENES)){
+    const L = LINES[sc.line];
+    const isOv = id.startsWith("ov-");
+    const sec = document.createElement("section");
+    sec.className = "scene";
+    sec.dataset.id = id;
+    sec.style.setProperty("--line", L.color);
+    sec.setAttribute("aria-hidden","true");
+    sec.innerHTML = `
+      <div class="head">
+        <button class="crumb" data-go="${L.overview}">${L.name}</button>
+        <button class="mini" data-go="map" aria-label="Back to the map"><svg viewBox="0 0 1600 900">${drawMap({mini:true, hiStation:isOv?null:id, hiLine:sc.line})}</svg></button>
+      </div>
+      ${sc.html}
+      <div class="foot">
+        <span>${isOv ? "Choose a part to look closer" : ""}</span>
+        <div class="navbtns"><button data-nav="prev">Previous</button><button data-nav="map">Map</button><button data-nav="next">Next</button></div>
+      </div>`;
+    scenesEl.appendChild(sec);
+  }
+}
+
+function sceneEl(id){ return scenesEl.querySelector(`.scene[data-id="${id}"]`); }
+
+function focusPoint(id){
+  if(STATIONS[id]) return STATIONS[id];
+  if(SCENES[id] && SCENES[id].focus) return STATIONS[SCENES[id].focus];
+  return {x:800,y:450};
+}
+
+/* =========================================================
+   Map zoom
+   The map is drawn once onto a large canvas at load (and again if the
+   window is resized). During a zoom the live map is swapped for this
+   picture and the browser's compositor scales it, which runs smoothly
+   even while the next page is being prepared.
+   ========================================================= */
+const ZOOM = 2.6, MOVE_MS = 750, EASE = "cubic-bezier(.45,0,.2,1)";
+const mapCanvas = document.getElementById("mapcanvas");
+const reduced = ()=>matchMedia("(prefers-reduced-motion: reduce)").matches;
+const wait = ms => new Promise(r=>setTimeout(r, reduced() ? 0 : ms));
+let fit = {f:1, ox:0, oy:0};
+const logo = new Image();
+let logoOK = false;
+logo.onload = ()=>{ logoOK = true; drawCanvas(); };
+logo.src = "assets/cis-logo.png";
+
+function cssVar(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+
+function drawCanvas(){
+  const W = innerWidth, H = innerHeight, dpr = window.devicePixelRatio || 1;
+  const f = Math.min(W/1600, H/900);
+  fit = { f, ox:(W-1600*f)/2, oy:(H-900*f)/2 };
+  const R = Math.min(ZOOM, 8000/(W*dpr), 8000/(H*dpr));
+  mapCanvas.width = Math.round(W*dpr*R);
+  mapCanvas.height = Math.round(H*dpr*R);
+  const k = dpr*R, c = mapCanvas.getContext("2d");
+  c.setTransform(1,0,0,1,0,0);
+  c.clearRect(0,0,mapCanvas.width,mapCanvas.height);
+  c.setTransform(k*f,0,0,k*f,k*fit.ox,k*fit.oy);
+  const sans = cssVar("--sans"), serif = cssVar("--serif");
+  c.lineCap = "round"; c.lineJoin = "round"; c.textBaseline = "alphabetic";
+
+  /* title */
+  c.font = `700 86px ${serif}`; c.fillStyle = "#002099"; c.textAlign = "left";
+  c.fillText("AI in CIS", 150, 150);
+  const tw = c.measureText("AI in CIS").width;
+  c.font = `600 86px ${serif}`; c.fillStyle = "#9AA3C7";
+  c.fillText("2026–27", 150 + tw + 28, 150);
+  if(logoOK){
+    const bw=300, bh=110, r=Math.min(bw/logo.width, bh/logo.height), w=logo.width*r, h=logo.height*r;
+    c.drawImage(logo, 1180+bw-w, 62+(bh-h)/2, w, h);
+  }
+  /* lines */
+  for(const L of Object.values(LINES)){
+    if(L.future){
+      c.setLineDash([22,18]); c.strokeStyle = "#B7BDCB"; c.lineWidth = 16; c.stroke(new Path2D(L.future)); c.setLineDash([]);
+    }
+    c.strokeStyle = L.color; c.lineWidth = 16; c.stroke(new Path2D(L.path));
+    c.font = `700 22px ${sans}`; c.fillStyle = L.color; c.textAlign = "left";
+    c.fillText(L.name, L.label[0], L.label[1]);
+  }
+  /* future stations */
+  c.textAlign = "center";
+  for(const F of FUTURE){
+    c.beginPath(); c.arc(F.x,F.y,15,0,Math.PI*2); c.fillStyle="#fff"; c.fill();
+    c.lineWidth=6; c.strokeStyle="#B7BDCB"; c.stroke();
+    c.font = `500 19px ${sans}`; c.fillStyle = "#8A90A0"; c.fillText(F.label, F.x, F.y+46);
+  }
+  /* stations */
+  for(const S of Object.values(STATIONS)){
+    const col = LINES[S.line].color;
+    c.beginPath(); c.arc(S.x,S.y,18,0,Math.PI*2); c.fillStyle="#fff"; c.fill();
+    c.lineWidth=7; c.strokeStyle=col; c.stroke();
+    if(S.built){ c.beginPath(); c.arc(S.x,S.y,7,0,Math.PI*2); c.fillStyle=col; c.fill(); }
+    c.font = `700 21px ${sans}`; c.fillStyle = "#1D2233";
+    S.label.split("|").forEach((p,i)=>c.fillText(p, S.x, S.y+50+i*24));
+  }
+  /* legend and hint */
+  c.textAlign = "left";
+  c.beginPath(); c.arc(160,866,12,0,Math.PI*2); c.fillStyle="#fff"; c.fill(); c.lineWidth=5; c.strokeStyle="#5A6175"; c.stroke();
+  c.beginPath(); c.arc(160,866,4.5,0,Math.PI*2); c.fillStyle="#5A6175"; c.fill();
+  c.font = `400 17px ${sans}`; c.fillStyle="#5A6175"; c.fillText("Built in-house using AI", 184, 872);
+  c.setLineDash([12,9]); c.strokeStyle="#B7BDCB"; c.lineWidth=10; c.stroke(new Path2D("M420 866 H480")); c.setLineDash([]);
+  c.fillText("Possible next steps", 496, 872);
+  c.font = `400 19px ${sans}`; c.textAlign = "right"; c.fillText("Press → to start, or choose a station", 1490, 872);
+}
+
+function zoomTarget(p){
+  const sx = fit.ox + p.x*fit.f, sy = fit.oy + p.y*fit.f;
+  return { origin:`${sx}px ${sy}px`, to:`translate(${innerWidth/2 - sx}px,${innerHeight/2 - sy}px) scale(${ZOOM})` };
+}
+let zoomAnim = null;
+function runZoom(p, inward){
+  const t = zoomTarget(p);
+  mapCanvas.style.transformOrigin = t.origin;
+  const frames = [{transform:"translate(0px,0px) scale(1)"},{transform:t.to}];
+  if(!inward) frames.reverse();
+  if(zoomAnim) zoomAnim.cancel();
+  zoomAnim = mapCanvas.animate(frames, {duration: reduced()?1:MOVE_MS, easing:EASE, fill:"forwards"});
+  return zoomAnim.finished.catch(()=>{});
+}
+
+let resizeTimer;
+addEventListener("resize", ()=>{ clearTimeout(resizeTimer); resizeTimer = setTimeout(drawCanvas, 150); });
+
+/* Videos inside [data-cascade] take turns: top, then bottom, then back to the top */
+function playOnly(box, v){
+  box.querySelectorAll("video").forEach(x=>{ if(x!==v){ x.pause(); x.closest(".media")?.classList.add("waiting"); } });
+  v.closest(".media")?.classList.remove("waiting");
+  v.currentTime = 0;
+  v.play().catch(()=>{});
+}
+function setupCascade(box){
+  if(box.dataset.ready) return;
+  box.dataset.ready = "1";
+  box.addEventListener("ended", e=>{
+    const vids = [...box.querySelectorAll("video")];
+    const i = vids.indexOf(e.target);
+    if(i>-1) playOnly(box, vids[(i+1) % vids.length]);
+  }, true);
+}
+function mediaOn(sec, on){
+  sec.querySelectorAll("video").forEach(v=>{
+    if(on){
+      if(!v.src && v.dataset.src){ v.src = v.dataset.src; }
+      if(v.closest("[data-cascade]")){ v.loop = false; v.preload = "auto"; return; }
+      v.play().catch(()=>{});
+    }
+    else v.pause();
+  });
+  if(on) sec.querySelectorAll("[data-cascade]").forEach(box=>{
+    setupCascade(box);
+    const first = box.querySelector("video");
+    if(first) playOnly(box, first);
+  });
+  if(on) sec.querySelectorAll("iframe[data-src]").forEach(f=>{ if(!f.src) f.src = f.dataset.src; });
+}
+
+function showScene(id){
+  const sec = sceneEl(id);
+  sec.style.zIndex = 3;
+  sec.setAttribute("aria-hidden","false");
+  sec.classList.add("in");
+  /* start videos and live sites only once the movement has finished */
+  clearTimeout(sec._media);
+  sec._media = setTimeout(()=>{ if(sec.classList.contains("in")) mediaOn(sec,true); }, 550);
+}
+function hideScene(id){
+  const sec = sceneEl(id);
+  if(!sec) return;
+  clearTimeout(sec._media);
+  sec.style.zIndex = 2;
+  sec.classList.remove("in");
+  sec.setAttribute("aria-hidden","true");
+  mediaOn(sec,false);
+}
+
+async function go(id){
+  if(animating || id===current) return;
+  animating = true;
+  const from = current;
+
+  if(from==="map"){
+    /* swap to the picture, zoom in, and fade the page in over the second half */
+    mapEl.classList.add("zooming");
+    const done = runZoom(focusPoint(id), true);
+    await wait(MOVE_MS*0.45);
+    showScene(id);
+    await done;
+    mapEl.classList.add("away");
+  } else if(id==="map"){
+    /* start zoomed in on where we were and pull back while the page fades out */
+    mapEl.classList.add("zooming");
+    const done = runZoom(focusPoint(from), false);
+    mapEl.classList.remove("away");
+    hideScene(from);
+    await done;
+    mapEl.classList.remove("zooming");
+    if(zoomAnim){ zoomAnim.cancel(); zoomAnim = null; }
+  } else {
+    /* page to page: crossfade */
+    showScene(id);
+    hideScene(from);
+    await wait(450);
+  }
+  current = id;
+  animating = false;
+}
+
+function step(dir){
+  const id = current;
+  if(MAIN_PATH.includes(id)){
+    const n = MAIN_PATH.length;
+    go(MAIN_PATH[(MAIN_PATH.indexOf(id)+dir+n) % n]);
+    return;
+  }
+  const seq = STRANDS[lineOf(id)], i = seq.indexOf(id), j = i+dir;
+  if(j<0) return;
+  go(j<seq.length ? seq[j] : seq[0]);
+}
+
+/* Clicks */
+document.addEventListener("click", e=>{
+  const nav = e.target.closest("[data-nav]");
+  if(nav){ const n = nav.dataset.nav; n==="map" ? go("map") : step(n==="next"?1:-1); return; }
+  const pg = e.target.closest("[data-page]");
+  if(pg){
+    pg.parentElement.querySelectorAll("[data-page]").forEach(b=>b.setAttribute("aria-pressed", b===pg));
+    loadInFrame(pg.closest(".browser"), pg.dataset.page, pg.dataset.shot);
+    return;
+  }
+  const sw = e.target.closest("[data-swap]");
+  if(sw){
+    const vp = sw.closest(".browser").querySelector(".viewport");
+    const fr = vp.querySelector("iframe");
+    if(fr){ fr.dataset.keep = fr.src || fr.dataset.src; const im=document.createElement("img"); im.src=sw.dataset.swap; im.alt=""; im.onerror=()=>missing(im); vp.replaceChildren(im); sw.textContent="Show live site"; }
+    else { const f=document.createElement("iframe"); f.className="live"; f.src=sw.dataset.live; vp.replaceChildren(f); sw.textContent="Show screenshot"; }
+    return;
+  }
+  const tab = e.target.closest("[data-tab]");
+  if(tab){
+    const vis = tab.closest(".visual");
+    vis.querySelectorAll("[data-tab]").forEach(b=>b.setAttribute("aria-selected", b===tab));
+    vis.querySelectorAll("[data-panel]").forEach(p=>p.classList.toggle("on", p.dataset.panel===tab.dataset.tab));
+    mediaOn(vis.closest(".scene"), true);
+    return;
+  }
+  const g = e.target.closest("[data-go]");
+  if(g) go(g.dataset.go);
+});
+mapSvg.addEventListener("keydown", e=>{
+  const g = e.target.closest && e.target.closest("[data-go]");
+  if(g && (e.key==="Enter" || e.key===" ")){ e.preventDefault(); go(g.dataset.go); }
+});
+
+/* Keyboard and presentation clickers.
+   Clickers usually send Page Down / Page Up, but some send arrow keys,
+   older key names, or only a key code, so all of those are accepted. */
+const NEXT_KEYS = ["ArrowRight","PageDown","Right","ArrowDown","Down","Next"];
+const PREV_KEYS = ["ArrowLeft","PageUp","Left","ArrowUp","Up","Prior"];
+const NEXT_CODES = [34,39,40], PREV_CODES = [33,37,38];
+let lastKeyTime = 0;
+function handleKey(e){
+  if(e.target.tagName==="INPUT"){
+    if(e.key==="Enter"){
+      e.preventDefault();
+      let u = e.target.value.trim();
+      if(u && !/^https?:\/\//i.test(u)) u = "https://" + u;
+      if(u){ const br = e.target.closest(".browser");
+        br.querySelectorAll("[data-page]").forEach(b=>b.setAttribute("aria-pressed","false"));
+        loadInFrame(br, u, null); }
+      e.target.blur();
+    } else if(e.key==="Escape"){ e.target.blur(); }
+    return;
+  }
+  /* let up/down scroll the guide when it has focus */
+  if((e.key==="ArrowDown"||e.key==="ArrowUp") && document.activeElement && document.activeElement.closest(".guide")) return;
+  const k = e.key, c = e.keyCode;
+  let dir = 0;
+  if(NEXT_KEYS.includes(k) || NEXT_CODES.includes(c)) dir = 1;
+  else if(PREV_KEYS.includes(k) || PREV_CODES.includes(c)) dir = -1;
+  else if(k===" " && current==="map") dir = 1;
+  if(dir){
+    e.preventDefault();
+    /* some clickers send the same press twice; ignore repeats within 250 ms */
+    const now = performance.now();
+    if(now - lastKeyTime < 250) return;
+    lastKeyTime = now;
+    step(dir);
+  } else if(k==="Escape" || k==="m" || k==="M"){
+    go("map");
+  }
+  if(keyDebug) keyDebug.textContent = `Last key: ${k || "?"} (code ${c})`;
+}
+window.addEventListener("keydown", handleKey, true);
+
+/* A live website inside a frame takes the keyboard focus when it is clicked,
+   and the clicker's presses then go to that website instead of this page.
+   As soon as the mouse leaves the frame, take the focus back. */
+document.addEventListener("mouseout", e=>{
+  if(e.target.tagName==="IFRAME" && document.activeElement && document.activeElement.tagName==="IFRAME"){
+    document.activeElement.blur(); window.focus();
+  }
+});
+setInterval(()=>{
+  const a = document.activeElement;
+  if(a && a.tagName==="IFRAME" && !a.matches(":hover")){ a.blur(); window.focus(); }
+}, 500);
+
+/* Add ?keys to the address to see what your clicker sends */
+let keyDebug = null;
+if(location.search.includes("keys")){
+  keyDebug = document.createElement("div");
+  keyDebug.style.cssText = "position:fixed;left:12px;bottom:12px;z-index:99;background:#1D2233;color:#fff;font:14px/1.4 system-ui;padding:8px 12px;border-radius:8px";
+  keyDebug.textContent = "Press a button on your clicker";
+  document.body.appendChild(keyDebug);
+}
+
+buildScenes();
+mapSvg.innerHTML = drawMap();
+drawCanvas();
+if(document.fonts && document.fonts.ready) document.fonts.ready.then(drawCanvas);
+</script>
+</body>
+</html>
